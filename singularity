@@ -1,0 +1,610 @@
+local options = {
+	rainbow = true,
+	stripescolor = Color3.fromRGB(35, 35, 35),
+	topcolor = Color3.fromRGB(35, 35, 35),
+	textcolor = Color3.fromRGB(255, 255, 255),
+	slidercolor = Color3.fromRGB(255, 255, 255),
+	underlinecolor = Color3.fromRGB(35, 35, 35),
+	animatedbackground = true,
+	togglekey = Enum.KeyCode.KeypadZero,
+	sliderbackground = true,
+	titlefont = Enum.Font.GothamBlack,
+	font = Enum.Font.SciFi,
+	removelast  = true,
+	overlay = true
+}
+
+if options.removelast then
+    for i,v in next, game:GetService'CoreGui':GetChildren() do
+        if v.Name == "Library" then
+            v:Remove()
+        end
+    end 
+end
+
+local library = {}
+local tabs = {}
+
+local TweenService = game:GetService("TweenService")
+local ws = game:GetService("Workspace")
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+
+local Design1 = Instance.new("ScreenGui")
+
+Design1.Name = "Library"
+Design1.Parent = game.CoreGui
+
+local overlay = Instance.new("Frame",Design1)
+local modalbutton = Instance.new("TextButton",overlay)
+modalbutton.Modal = true
+
+local function GetWindowSize ()
+	local ws = game:GetService("Workspace")
+	local X = ws.Camera.ViewportSize.X
+	local Y = ws.Camera.ViewportSize.Y
+	return {["X"] = X, ["Y"] = Y}
+end
+
+overlay.Position = UDim2.new(0, 0, 0, -36)
+overlay.Size = UDim2.new(0, GetWindowSize().X, 0, GetWindowSize().Y)
+overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+overlay.Transparency = 1
+
+local uiengineinternals = {okhand = false, isreset = false, uiuwu = {
+    howmuchtoincrease = 0.50,
+    thecheck = math.floor(GetWindowSize().X / 300) - 1 -- new way of rows credits: sing (smart)
+}}
+
+local oldPositions = {}
+local isopen = true
+local canaction = false
+
+local function Resize (part,new,_delay)
+	_delay = _delay or 0.5
+	local tweenInfo = TweenInfo.new(_delay, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local tween = TweenService:Create(part, tweenInfo, new)
+	tween:Play()
+end
+
+if options.overlay then
+    Resize(overlay,{Transparency = 0.5})
+end
+
+local MIE = uis.MouseIconEnabled
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+local oldnewindex = mt.__newindex
+mt.__newindex = newcclosure(function(t,i,k)
+	if t == uis and i == "MouseIconEnabled" then
+		if isopen then
+			return true
+		else
+			MIE = k
+		end
+	end
+	return oldnewindex(t,i,k)
+end)
+uis.MouseIconEnabled = true
+
+uis.InputBegan:connect(function(inputobj)
+	if inputobj.KeyCode == options.togglekey then
+		if not canaction then
+			return
+		end
+		if isopen then -- Closing
+			canaction = false
+			for index,tab in next, tabs do
+				oldPositions[index] = tab.Position
+				Resize(tab,{Position = UDim2.new(-1, 0, -1, 0)})
+			end
+			Resize(overlay,{Transparency = 1})
+			modalbutton.Modal = false
+			uis.MouseIconEnabled = MIE
+			spawn(function() wait(0.5) canaction = true end)
+		else -- Opening
+			canaction = false
+			for index,tab in next, tabs do
+				Resize(tab,{Position = oldPositions[index]})
+			end
+			if options.overlay then
+                Resize(overlay,{Transparency = 0.5})
+            end
+			modalbutton.Modal = true
+			uis.MouseIconEnabled = true
+			spawn(function() wait(0.5) canaction = true end)
+		end
+		isopen = not isopen
+	end
+end)
+
+local function CreateDrag (gui)
+    local UserInputService = game:GetService("UserInputService")
+    local dragging
+    local dragInput
+    local dragStart
+	local startPos
+
+    local function update(input)
+		local delta = input.Position - dragStart
+		Resize(gui, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}, 0.16)
+	end
+
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+	end)
+
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+	end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
+local function CreateLiquidBar (hue, brightness, transparency, contrastlevel, speed, rpart)
+	local Fragments = {}
+	local length = rpart.AbsoluteSize.X
+	local height = rpart.AbsoluteSize.Y
+
+	local function ColorFragment (n,c)
+		local p = Fragments[n]
+		p.BackgroundColor3 = c
+	end
+
+	local WindowSize = GetWindowSize()
+	local len = rpart.AbsoluteSize.X
+	for i = 1, length do
+		Fragment = Instance.new("Frame", rpart)
+		Fragment.BorderSizePixel = 0
+		Fragment.Size = UDim2.new(0, 1, 0, height)
+		Fragment.Position = UDim2.new((i - 1) / len, 0, 0, 0)
+		Fragment.Transparency = transparency
+		Fragment.ZIndex = rpart.ZIndex
+
+		table.insert(Fragments, Fragment)
+
+		local seth = hue + i / contrastlevel
+		local setcolor = Color3.fromHSV(seth / 255 % 1, 1, brightness)
+		ColorFragment(i, setcolor)
+	end
+
+	local function Set (howmuch)
+		for i = 1, length do
+			local newh = hue + howmuch + i / contrastlevel
+			local newcolor = Color3.fromHSV(newh / 255 % 1, 1, brightness)
+			ColorFragment(i, newcolor)
+		end
+	end
+
+	local function Rotate ()
+		for i = 255, 1, -1 do
+			Set(i)
+			wait(speed)
+		end
+		Set(0)
+	end
+
+	spawn(Rotate)
+
+	spawn(function()
+		while wait() do
+			Rotate()
+		end
+	end)
+end
+
+local function CreateTop (text)
+	text = text or "New tab"
+	local part = Instance.new("Frame", Design1)
+
+	local maxtabs = GetWindowSize().X / 300
+
+	if #tabs > uiengineinternals.uiuwu.thecheck and not uiengineinternals["okhand"] then
+        uiengineinternals["isreset"] = true
+    end
+
+	if uiengineinternals["isreset"] then
+        part.Position = UDim2.new(0, 100, #tabs > uiengineinternals.uiuwu.thecheck and uiengineinternals.uiuwu.howmuchtoincrease or 0, 50)
+        uiengineinternals["isreset"] = false
+        uiengineinternals["okhand"] = true
+    else
+        part.Position = UDim2.new(0, #tabs == 0 and 100 or tabs[#tabs].Position.X.Offset + 300, #tabs > uiengineinternals.uiuwu.thecheck and uiengineinternals.uiuwu.howmuchtoincrease or 0, 50)
+    end
+
+	part.Size = UDim2.new(0, 250, 0, 25)
+	-- part.Position = UDim2.new(0, 100 + 300 * #tabs, 0, 50)
+	part.BorderSizePixel = 4
+	part.BorderColor3 = Color3.fromRGB(40, 40, 40)
+	part.BackgroundColor3 = options.topcolor
+	part.Draggable = true
+	part.ZIndex = 3
+
+	if options.rainbow then
+		CreateLiquidBar(0, 0.8, 0, 10, 0.05, part) -- Hue, brightness, transparency, contrast, part
+	end
+
+	local label = Instance.new("TextLabel", part)
+	label.Size = part.Size
+	label.BackgroundTransparency = 1
+	label.TextSize = 19
+	label.TextStrokeColor3 = Color3.new(0, 0, 0)
+	label.TextStrokeTransparency = 0
+	label.TextXAlignment = Enum.TextXAlignment.Right
+	label.Font = options.titlefont
+	label.TextColor3 = options.textcolor
+	label.ZIndex = part.ZIndex
+	label.Text = tostring(text) .. "    "
+	CreateDrag(part)
+	table.insert(tabs, part)
+
+	local underline = Instance.new("Frame", part)
+	underline.BackgroundColor3 = options.underlinecolor
+	underline.BorderSizePixel = 0
+	underline.Size = UDim2.new(0, 258, 0, 4)
+	underline.Position = UDim2.new(0.5, -129, 1.2, -4)
+	underline.ZIndex = part.ZIndex
+
+	return part
+end
+
+function library:CreateTab (name)
+	local elements = {}
+	local parts = {}
+
+	local pixelspacing = 32
+
+	local Top = CreateTop(name)
+	local body = Instance.new("Frame", Top)
+
+	body.Size = UDim2.new(0, 250, 0, 0)
+	body.Position = UDim2.new(0.5, -125, 6.5, -130)
+	body.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	body.BorderSizePixel = 4
+	body.BorderColor3 = Color3.fromRGB(40, 40, 40)
+	body.ClipsDescendants = true
+
+	local bodyelements = Instance.new("Frame", body)
+	bodyelements.ZIndex = 2
+	bodyelements.Size = body.Size + UDim2.new(0, 0, 0, 1000)
+	bodyelements.BackgroundTransparency = 1
+
+	local function CreateBackground (color)
+		local background = Instance.new("Frame", body)
+		local function CreateSection (pos)
+			local section = Instance.new("ImageLabel", background)
+
+			section.BackgroundColor3 = Color3.new(1, 1, 1)
+			section.Position = pos
+			section.Size = UDim2.new(0, 200, 0, 200)
+			section.BackgroundTransparency = 1
+			section.Image = "https://www.roblox.com/Thumbs/Asset.ashx?width=420&height=420&assetId=4000222087"
+			section.ImageColor3 = color
+		end
+
+		for x = 0, 2 do
+			for i = 0, 5 do
+				CreateSection(UDim2.new(0, 197 * x, 0, i * 200 - (i * 3)))
+			end
+		end
+
+		local function Rotate (speed)
+			local oldpos = UDim2.new(0, 0, 0, 0)
+			local newpos = UDim2.new(-1, 93, 0, 0)
+			local tweenInfo = TweenInfo.new(speed, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+			local tween = TweenService:Create(background, tweenInfo, {Position = newpos})
+
+			tween:Play()
+			wait(speed - 0.1)
+			background.Position = oldpos
+		end
+
+		spawn(function()
+			while true do
+				Rotate(10)
+			end
+		end)
+	end
+	if options.animatedbackground then
+		CreateBackground(options.stripescolor)
+	end
+	local actionbutton = Instance.new("TextButton", Top)
+	actionbutton.BackgroundTransparency = 1
+	actionbutton.TextScaled = true
+	actionbutton.TextColor3 = options.textcolor
+	actionbutton.TextStrokeTransparency = 0
+	actionbutton.TextStrokeColor3 = Color3.new(1, 1, 1)
+	actionbutton.Size = UDim2.new(0, 25, 0, 25)
+	actionbutton.Position = UDim2.new(0.02, 0, 0, 0)
+	actionbutton.Text = "-"
+	actionbutton.ZIndex = Top.ZIndex
+
+	local function Close ()
+        Resize(body,{Size = UDim2.new(0, 250, 0, 0), Position = UDim2.new(0.5, -125, 6.5, -150)})
+        actionbutton.Text = "+"
+        Resize(actionbutton, {Rotation = 180}, 0.25)
+        actionbutton.Rotation = 0
+    end
+
+    local function Open ()
+        Resize(body, {Size = UDim2.new(0, 250, 0, pixelspacing * #parts), Position = UDim2.new(0.5, -125, 6.5, -130)})
+        actionbutton.Text = "-"
+        Resize(actionbutton, {Rotation = -180}, 0.25)
+        actionbutton.Rotation = 0
+    end
+
+	local open = true
+	actionbutton.MouseButton1Click:connect(function()
+		open = not open
+		func = open and Open or Close
+		func()
+	end)
+
+	function elements:AddButton (text, callback)
+		text = text or "New button"
+		callback = callback or function() end
+
+		local button = Instance.new("TextButton", bodyelements)
+
+		button.Size = UDim2.new(0, 240, 0, 30)
+		button.Position = UDim2.new(0.02, 0, (pixelspacing / 1000) * #parts + 0.0025, 0)
+		button.BackgroundTransparency = 1
+		button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		button.BorderSizePixel = 0
+		button.TextColor3 = Color3.new(1, 1, 1)
+		button.TextSize = 14
+		button.TextXAlignment = Enum.TextXAlignment.Left
+		button.Font = options.font
+		button.Text = "    " .. tostring(text)
+		button.ZIndex = bodyelements.ZIndex
+
+		button.MouseButton1Click:connect(function()
+			pcall(callback)
+		end)
+
+		Resize(body, {Size = UDim2.new(0, 250, 0, pixelspacing * #parts + 35)})
+
+		table.insert(parts, button)
+	end
+
+	function elements:AddSwitch (text, callback)
+		local switchactions = {}
+		text = text or "New switch"
+		callback = callback or function() end
+
+		local switch = Instance.new("TextLabel", bodyelements)
+		switch.Size = UDim2.new(0, 240, 0, 30)
+		switch.Position = UDim2.new(0.02, 0, (pixelspacing / 1000) * #parts + 0.0025, 0)
+		switch.BackgroundTransparency = 1
+		switch.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		switch.BorderSizePixel = 0
+		switch.TextColor3 = Color3.new(1, 1, 1)
+		switch.TextSize = 14
+		switch.TextXAlignment = Enum.TextXAlignment.Left
+		switch.Font = options.font
+		switch.Text = "    " .. tostring(text)
+		switch.ZIndex = bodyelements.ZIndex
+
+		local enabled = false
+		local checkmark = Instance.new("TextButton", switch)
+		checkmark.Size = UDim2.new(0, 20, 0, 20)
+		checkmark.Position = UDim2.new(0.9, 0, 0.15, 0)
+		checkmark.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		checkmark.BorderColor3 = Color3.fromRGB(45, 45, 45)
+		checkmark.BorderSizePixel = 1
+		checkmark.TextColor3 = Color3.new(1, 1, 1)
+		checkmark.TextScaled = true
+		checkmark.Text = ""
+		checkmark.ZIndex = switch.ZIndex
+		checkmark.AutoButtonColor = false
+
+		local function Trigger ()
+			enabled = not enabled
+			checkmark.Text = enabled and utf8.char(10003) or ""
+			pcall(callback, enabled)
+		end
+
+		checkmark.MouseButton1Click:connect(Trigger)
+
+		function switchactions:Set (state)
+			enabled = state
+			checkmark.Text = enabled and utf8.char(10003) or ""
+			pcall(callback, enabled)
+		end
+
+		Resize(body, {Size = UDim2.new(0, 250, 0, pixelspacing * #parts + 35)})
+		table.insert(parts, switch)
+
+		return switchactions
+	end
+
+	function elements:AddBox(placeholder, callback)
+		placeholder = placeholder or "New Box"
+		callback = callback or function() end
+		local button = Instance.new("TextBox", bodyelements)
+		button.Size = UDim2.new(0, 240, 0, 30)
+		button.Position = UDim2.new(0.07, 0, (pixelspacing / 1000) * #parts + 0.0025, 0)
+		button.BackgroundTransparency = 1
+		button.BorderSizePixel = 0
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		button.TextSize = 14
+		button.TextXAlignment = Enum.TextXAlignment.Left
+		button.Font = options.font
+		button.Text = ""
+		button.PlaceholderText = placeholder
+		button.ZIndex = bodyelements.ZIndex
+		button.FocusLost:connect(function()
+			pcall(callback, button.Text)
+			button.Text = ""
+		end)
+		Resize(body, {Size = UDim2.new(0, 250, 0, pixelspacing * #parts + 35)})
+		table.insert(parts, button)
+	end
+
+	function elements:AddLabel(text)
+		text = text or "New Label"
+		local button = Instance.new("TextLabel", bodyelements)
+		button.Size = UDim2.new(0, 240, 0, 30)
+		button.Position = UDim2.new(0.07, 0, (pixelspacing / 1000) * #parts + 0.0025, 0)
+		button.BackgroundTransparency = 1
+		button.BorderSizePixel = 0
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		button.TextSize = 14
+		button.TextXAlignment = Enum.TextXAlignment.Left
+		button.Font = options.font
+		button.Text = text
+		button.ZIndex = bodyelements.ZIndex
+		Resize(body, {Size = UDim2.new(0, 250, 0, pixelspacing * #parts + 35)})
+		table.insert(parts, button)
+	end
+
+	function elements:AddSlider (text, minvalue, maxvalue, callback)
+		local slideractions = {}
+		text = text or "New slider"
+		minvalue = minvalue or 0
+		maxvalue = maxvalue or 100
+		callback = callback or function() end
+
+		local box = Instance.new("TextLabel", bodyelements)
+		box.Size = UDim2.new(0, 240, 0, 24)
+		box.Position = UDim2.new(0.02, 0, (pixelspacing / 1000) * #parts + 0.0025, 0)
+		box.BackgroundTransparency = 1
+		box.TextColor3 = options.textcolor
+		box.TextSize = 14
+		box.TextXAlignment = Enum.TextXAlignment.Left
+		box.TextYAlignment = Enum.TextYAlignment.Top
+		box.Font = options.font
+		box.Text = "    " .. tostring(text)
+		box.ZIndex = bodyelements.ZIndex
+
+		local value = Instance.new("TextLabel", box)
+		value.Size = UDim2.new(0, 40, 0, 30)
+		value.Position = UDim2.new(0.75, 0, 0, 0)
+		value.BackgroundTransparency = 1
+		value.TextColor3 = options.textcolor
+		value.Text = minvalue
+		value.TextSize = 10
+		value.ZIndex = box.ZIndex
+		value.TextYAlignment = Enum.TextYAlignment.Top
+
+		local container = Instance.new("ImageLabel", box)
+		container.BackgroundTransparency = 1
+		container.Position = UDim2.new(0.05, 0, 0.9, 0)
+		container.Size = UDim2.new(0, 200, 0, 5)
+		container.Image = "rbxassetid://2851926732"
+		container.ImageColor3 = Color3.fromRGB(100, 100, 100)
+		container.ScaleType = Enum.ScaleType.Slice
+		container.SliceCenter = Rect.new(12, 12, 12, 12)
+		container.ZIndex = box.ZIndex
+
+		local containerindicator = Instance.new("ImageLabel", container)
+		containerindicator.BackgroundTransparency = 1
+		containerindicator.Size = UDim2.new(0, 0, 0, 5)
+		containerindicator.Image = "rbxassetid://2851926732"
+		containerindicator.ImageColor3 = options.slidercolor
+		containerindicator.ScaleType = Enum.ScaleType.Slice
+		containerindicator.SliceCenter = Rect.new(12, 12, 12, 12)
+		containerindicator.ZIndex = container.ZIndex
+
+		local ball = Instance.new("TextButton", container)
+		ball.BackgroundTransparency = 1
+		ball.Size = UDim2.new(0, 10, 0, 10)
+		ball.Position = UDim2.new(0, 0, 0, -2.5)
+		ball.BackgroundTransparency = 1
+		ball.ZIndex = container.ZIndex
+		ball.Text = ""
+
+		local balltexture = Instance.new("ImageLabel", ball)
+		balltexture.Size = UDim2.new(1, 0, 1, 0)
+		balltexture.Image = "rbxassetid://2851926732"
+		balltexture.ScaleType = Enum.ScaleType.Slice
+		balltexture.SliceCenter = Rect.new(12, 12, 12, 12)
+		balltexture.ZIndex = ball.ZIndex
+		balltexture.BackgroundTransparency = 1
+
+		do -- Slider math
+			local currentvalue = minvalue
+
+			local Dragging
+			ball.MouseButton1Down:connect(function()
+				Dragging = true
+			end)
+			uis.InputEnded:Connect(function(inputObject)
+				if inputObject.UserInputType == Enum.UserInputType.MouseButton1 then
+					Dragging = false
+				end
+			end)
+
+			local originalpos = ball.Position
+
+			local function GetValue ()
+				local maxval = container.AbsoluteSize.X
+				local currentval = ball.Position.X.Offset
+				return math.floor((currentval / maxval) * (maxvalue - minvalue) + minvalue)
+			end
+
+			local function SetValue (x)
+				local newposition = UDim2.new(
+					UDim.new(
+						0,
+						math.clamp(x, 0, container.AbsoluteSize.X)
+					),
+					originalpos.Y
+				)
+				Resize(ball, {Position = newposition}, 0.14)
+				if options.sliderbackground then
+					local newsize = UDim2.new(
+						UDim.new(
+							0,
+							math.clamp(x, 0, container.AbsoluteSize.X)
+						), 0, 0
+					) + UDim2.new(0, 0, 0, 5)
+					Resize(containerindicator, {Size = newsize}, 0.14)
+				end
+				value.Text = tostring(GetValue())
+			end
+
+			uis.InputChanged:connect(function(InputObject, GameProcessedEvent)
+				if ((not GameProcessedEvent) and Dragging) then
+					if (InputObject.UserInputType == Enum.UserInputType.MouseMovement) then
+						local set = InputObject.Position.X - container.AbsolutePosition.X
+						SetValue(set)
+					end
+				end
+			end)
+
+			value:GetPropertyChangedSignal("Text"):Connect(function()
+				pcall(callback, GetValue())
+			end)
+
+			function slideractions:Set (x) -- broken :(
+				SetValue((x / (maxvalue - minvalue) + minvalue) / 200)
+			end
+		end
+
+		Resize(body, {Size = UDim2.new(0, 250, 0, pixelspacing * #parts + 35)})
+		table.insert(parts, box)
+		return slideractions
+	end
+
+	spawn(function() wait(0.5) canaction = true end)
+
+	return elements
+end
+
+local UILib = library
