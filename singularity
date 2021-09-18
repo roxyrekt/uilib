@@ -606,5 +606,3 @@ function library:CreateTab (name)
 
 	return elements
 end
-
-local UILib = library
