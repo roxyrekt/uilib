@@ -1171,11 +1171,3 @@ function framework:createScreenLabel(args)
     insert(self.labels, screenLabel)
     return screenLabel
 end
-
-local watermark = framework:createScreenLabel{text = "YUKIHOOK | " .. os.date("%X") .. " | YUKINO"}
-local watermarkConnection = framework("createConnection", {name = "watermark", connection = RunService.Heartbeat, callback = function()
-    watermark:changeText("YUKIHOOK | " .. os.date("%X") .. " | YUKINO")
-end})
-local window = framework:createWindow{}
-local tab = window:createTab{name = "aimbot"}
-local label = tab:createLabel{text = "Soon"}
