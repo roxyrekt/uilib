@@ -2,7 +2,7 @@ for _,ui in pairs(game:GetService("CoreGui"):GetChildren()) do
     if ui.Name == "ScreenGui" then
        ui:Destroy() 
     end
-end
+end task.wait()
 
 --[[
 
